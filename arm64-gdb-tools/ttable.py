@@ -354,18 +354,20 @@ def parse_descriptor(desc, lvlidx, curr_lvl, parent, is_root_tabel = False):
         else:
             taddr = desc
 
+        tmem = bytearray(gdb.selected_inferior().read_memory(taddr, 4096))
+
         logger.debug("\t" * (curr_lvl + 1) + "lvl "+ str(curr_lvl + 1) + " Table at " +
                 hex(taddr) + str(curr_lvl + 1) + " " + str(lvlidx))
         base, end = get_table_range(lvlidx, curr_lvl + 1)
         table = Table(base, end, desc, curr_lvl + 1, parent)
         tentries = []
+        elem = 0;
 
         for i in range(512):
             lvlidx[curr_lvl + 1] = i
-            elem = taddr + (i*8)
-            vp = gdb.Value(elem).cast(gdb.lookup_type('uint64_t').pointer())
-            v = int((vp.dereference()))
-            tentries.append(parse_descriptor(v, lvlidx, curr_lvl + 1, table))
+            nxt_desc = struct.unpack('L',tmem[slice(elem,elem+8)])[0]
+            tentries.append(parse_descriptor(nxt_desc, lvlidx, curr_lvl + 1, table))
+            elem += 8
 
         lvlidx[curr_lvl + 1] = 0
         table.set_entries(tentries)
