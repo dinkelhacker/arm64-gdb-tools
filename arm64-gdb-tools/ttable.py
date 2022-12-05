@@ -1,6 +1,7 @@
 import struct
 import logging
 import gdb
+import openocd
 logger = logging.getLogger("vmmap")
 
 from utils import format_highlight, format_hex
@@ -340,7 +341,7 @@ def get_table_range(lvlidx, lvl):
     e = b + tsize[lvl] - 1
     return (b, e)
 
-def parse_descriptor(desc, lvlidx, curr_lvl, parent, is_root_tabel = False):
+def parse_descriptor(desc, lvlidx, curr_lvl, parent, read_mem, is_root_tabel = False):
     if (is_table(desc, curr_lvl) or is_root_tabel):
         # If it is not the root table, the descriptor will contain the physical
         # address of the next lvl table. We have to mask out the attributes and
@@ -354,20 +355,18 @@ def parse_descriptor(desc, lvlidx, curr_lvl, parent, is_root_tabel = False):
         else:
             taddr = desc
 
-        tmem = bytearray(gdb.selected_inferior().read_memory(taddr, 4096))
+        tmem = read_mem(taddr)
 
         logger.debug("\t" * (curr_lvl + 1) + "lvl "+ str(curr_lvl + 1) + " Table at " +
                 hex(taddr) + str(curr_lvl + 1) + " " + str(lvlidx))
         base, end = get_table_range(lvlidx, curr_lvl + 1)
         table = Table(base, end, desc, curr_lvl + 1, parent)
         tentries = []
-        elem = 0;
 
         for i in range(512):
             lvlidx[curr_lvl + 1] = i
-            nxt_desc = struct.unpack('L',tmem[slice(elem,elem+8)])[0]
-            tentries.append(parse_descriptor(nxt_desc, lvlidx, curr_lvl + 1, table))
-            elem += 8
+            nxt_desc = tmem[i]
+            tentries.append(parse_descriptor(nxt_desc, lvlidx, curr_lvl + 1, table, read_mem))
 
         lvlidx[curr_lvl + 1] = 0
         table.set_entries(tentries)

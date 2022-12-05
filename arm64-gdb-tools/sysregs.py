@@ -4,7 +4,8 @@ import openocd
 # https://developer.arm.com/documentation/ddi0595/2020-12/AArch64-Registers
 sysregs = {
     "TTBR0_EL1" :   (3,0,2,0,0),
-    "MAIR_EL1"  :   (3,0,10,2,0)
+    "MAIR_EL1"  :   (3,0,10,2,0),
+    "SCTLR_EL1"  :  (3,0,1,0,0)
 }
 
 
@@ -23,6 +24,4 @@ class Sysregs(gdb.Command):
     def invoke(self, arg, from_tty):
         for reg in sysregs:
             out = self.ocd._mrs(sysregs[reg][0], sysregs[reg][1], sysregs[reg][2], sysregs[reg][3], sysregs[reg][4])
-            print("{r} {v}".format(r = reg,v = out))
-        
-        print(self.ocd.read_phys_memory(64, 0x1ad7000, 20))
+            print("{r}\t{v}".format(r = reg,v = out))
