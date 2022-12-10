@@ -1,15 +1,32 @@
 # arm64-gdb-tools
 ## Introduction
-Collection (currently only one ;)) of gdb extensions that ease the development of arm64 bare metal applications.
+Collection of gdb extensions that ease the development of Aarch64 bare metal applications.
 
 ## Install
   * Copy the content of this repo to your gdb [data-directory](https://sourceware.org/gdb/onlinedocs/gdb/Python.html). Hint: If you are using the bare metal GNU toolchain [(aarch64-none-elf)](https://developer.arm.com/downloads/-/gnu-a) provided by ARM, this should be `/gcc-arm-xxxx/share/gdb/python/gdb/command/`.
 
+  * Some functionality depends on two OpenOcd patches which currently haven't made it into the master branch. The resprective commands are maked below (OpenOcd).
+    * Patch 1: Adds msr/mrs command to OpenOcd which is needed to read out system registers.
+      * https://review.openocd.org/c/openocd/+/5003
+    * Patch 2: Fixes a bug which ignored the most significant bits when reading 64 bit values from memory.
+      * https://review.openocd.org/c/openocd/+/7192 
+
 ## Commands
-### vmmap - print mmu translation table
 
-Reads an arm64 compliant mmu translation table from memory and prints it in human readable format to see if it matches your expectation. Currently only Stage 1 translation tables with a 4k granule are suported.
+1. [vmmap](#vmmap) - print mmu translation table (gdb/OpenOcd)
+2. [sysregs](#sysregs) - print system registers (OpenOcd)
 
+## vmmap
+
+Reads an Aarch64 compliant mmu translation table from memory and prints it in human readable format to see if it matches your expectation. Currently only Stage 1 translation tables with a 4k granule are suported.  
+
+This command comes in two flavours.
+
+* GDB - uses only gdb and is independet from OpenOcd. This comes with a few downsides. 
+  * **TTBR0_EL1 / MAIR_EL1** Since gdb can't read out system registers, the root table and the value of the MAIR_EL1 register must be passed via the **-tb** and **-m** options.
+  * **Virtual address offset:** Since gdb is looking at the memory through the eyes of the core that is debugged, turning on the MMU means we can only read virtual memory. That means the translation table must be mapped to virtual memory. If no identity mapping is used the the **-tvo** option must be used to tell the command the virtual address offset of the translation tables (this is due to the fact that inside the translation tables the addresses of next level tables are physical addresses).
+
+* OpenOcd - If gdb uses OpenOcd under the hood the aformentioned options don't have to be provided as we can use it to directly access system registers and read physical memory. Set [this flag](https://github.com/dinkelhacker/arm64-gdb-tools/blob/be87d5699e4b6c1bdf667c689fe97b6bf13fc73d/arm64-gdb-tools/vmmap.py#L22) to use this version of the command.
 
 The following options are available:
 ```
@@ -17,7 +34,7 @@ The following options are available:
                             show this help message and exit
 
   -tb TTBR, --ttbr TTBR
-                            First level translation table base address.
+                            First level translation table base address. (symbol or address)
 
   -m MAIR, --mair MAIR
                             Value stored in MAIR register.
@@ -46,11 +63,13 @@ The following options are available:
   -lvl {0,1}, --level {0,1}
                             Specifies the table lvl at which the translation starts. Default is 0.
 ```
-**Note: Since the addresses of next-level tables within the translation table will be physical addresses, the memory where those tables are located should be either made accessible via an identity mapping or by using the -tvo option.**
 
-### Examples:
+#### Examples:
 ```
-vmmap -lvl 0 -tb lvl0_table -tvo 0x4000000000 -ph -m 0xff44
+// Both versions would produce the same output.
+vmmap -tb lvl0_table -tvo 0x4000000000 -ph -m 0xff44 (GDB version)
+vmmap -ph (OpenOcd version)
+
 MAIR: 0x000000000000ff44
 Reading translation table from memory...
 First lvl Table: lvl0_table
@@ -77,4 +96,15 @@ GNU gdb (GNU Toolchain for the A-profile Architecture 10.3-2021.07 (arm-10.29)) 
 [phil@fedora os]$ openocd -v
 Open On-Chip Debugger 0.11.0
 ...
+```
+
+## sysregs
+
+The `sysregs` command uses OpenOcds capability to read out system registers like SCTLR_EL1 or TTBR0_EL1 and prints them to the console. [Just add the registers your interested in.](https://github.com/dinkelhacker/arm64-gdb-tools/blob/be87d5699e4b6c1bdf667c689fe97b6bf13fc73d/arm64-gdb-tools/sysregs.py#L5)
+
+```
+>>> sysregs
+TTBR0_EL1	0x0000000000000000
+SCTLR_EL1	0x0000000000c50838
+MAIR_EL1	0x44e048e000098aa4
 ```
