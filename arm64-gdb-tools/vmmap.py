@@ -21,10 +21,6 @@ class VMMAP(gdb.Command):
         self.entry_arg = None
         self.use_openocd = False
         self.read_mem = self._gdb_mem_reader
-        self.ocd = openocd.OpenOcd()
-        self.ocd.connect()
-        gdb.events.exited.connect(self.ocd.disconnect)
-
         self.parser = argparse.ArgumentParser(description='Inspect MMU translation table.')
         showgrp = self.parser.add_mutually_exclusive_group()
 
@@ -36,7 +32,11 @@ class VMMAP(gdb.Command):
                                         help='Value stored in MAIR register.')
             self.parser.add_argument('-tvo', '--tvirt_offset',
                                         help='Sets virtual address offset of next level table addresses.')
-        
+        else:
+            self.ocd = openocd.OpenOcd()
+            self.ocd.connect()
+            gdb.events.exited.connect(self.ocd.disconnect)
+
         self.parser.add_argument('-lvl', '--level', type=int, choices=range(0,2), default=0,
                                     help='Specifies the table lvl at which the translation starts. Default is 0.')
         self.parser.add_argument('-v', '--verbose', action='store_true',
@@ -54,7 +54,8 @@ class VMMAP(gdb.Command):
 
     def _gdb_mem_reader(self, taddr):
         raw_mem = bytes(gdb.selected_inferior().read_memory(taddr, 4096))
-        tmem = [struct.unpack('>Q', raw_mem[i:i+8])[0] for i in range(0, 4096,8)]
+        # TODO: If you have weird problems the endianess(<Q, >Q) might be wrong....
+        tmem = [struct.unpack('<Q', raw_mem[i:i+8])[0] for i in range(0, 4096,8)]
         return tmem
 
 
@@ -72,18 +73,18 @@ class VMMAP(gdb.Command):
 
             if (self.use_openocd == True):
                 self.read_mem = self._openocd_mem_reader
-                
+
                 (op0, op1, crn, crm, op2) = sysregs['TTBR0_EL1']
                 self.entry_arg = self.ocd._mrs(op0, op1, crn, crm, op2)
                 self.entry = parse_hex(self.entry_arg)
 
                 (op0, op1, crn, crm, op2) = sysregs['MAIR_EL1']
                 self.mair = parse_hex(self.ocd._mrs(op0, op1, crn, crm, op2))
-            
+
             else:
                 if (pargs.mair):
                     self.mair = parse_hex(pargs.mair)
-                
+
                 if (pargs.tvirt_offset):
                    ttable.VM_OFFSET = parse_hex(pargs.tvirt_offset)
 

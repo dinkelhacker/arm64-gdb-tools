@@ -5,7 +5,8 @@ import openocd
 sysregs = {
     "TTBR0_EL1" :   (3,0,2,0,0),
     "MAIR_EL1"  :   (3,0,10,2,0),
-    "SCTLR_EL1"  :  (3,0,1,0,0)
+    "SCTLR_EL1" :   (3,0,1,0,0),
+    "DAIF"      :   (3,3,4,2,1),
 }
 
 
